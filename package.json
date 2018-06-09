@@ -1,10 +1,11 @@
 {
-  "name": "spotify-now-playing",
+  "name": "kclassic-slacker",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon"
+    "start": "nodemon --inspect index.js",
+    "test": "eslint ."
   },
   "engines": {
     "node": "10.3.0",
@@ -13,9 +14,19 @@
   "author": "sycnus",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.16.3"
+    "body-parser": "^1.18.3",
+    "express": "^4.16.3",
+    "helmet": "^3.12.1",
+    "lodash": "^4.17.10",
+    "moment": "^2.22.2",
+    "mongoose": "^5.1.4",
+    "request": "^2.87.0",
+    "request-promise-native": "^1.0.5"
   },
   "devDependencies": {
+    "dotenv": "^6.0.0",
+    "eslint": "^4.19.1",
+    "eslint-plugin-node": "^6.0.1",
     "nodemon": "^1.17.5"
   },
   "private": true
