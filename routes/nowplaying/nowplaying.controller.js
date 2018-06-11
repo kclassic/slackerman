@@ -27,7 +27,10 @@ async function nowPlaying(req, res) {
     if (req.body.token !== SLACK.token) throw Error('Slack app token mismatch.'); //check slack verification token
     if (req.body.team_id !== SLACK.team_id) throw Error('Team id mismatch.'); // check team id as well
 
-    res.json({ response_type: 'in_channel' });
+    res.json({
+      response_type: 'ephemeral',
+      text: `${req.body.command} ${req.body.text}`,
+    });
 
     const slack_response_url = req.body.response_url;
     const id = req.body.user_id;
@@ -50,10 +53,17 @@ async function nowPlaying(req, res) {
           url: nowPlaying.item.external_urls.spotify,
         };
         */
+        let text = `<@${id}>: `;
+        if (req.body.text) {
+          text += req.body.text+'\n';
+        }
+        text += nowPlaying.item.external_urls.spotify;
+
         request.post(slack_response_url, {
           body: {
             response_type: 'in_channel',
-            text: nowPlaying.item.external_urls.spotify,
+            unfurl_media: true,
+            text,
           },
           json: true,
         });
