@@ -45,7 +45,7 @@ async function nowPlaying(req, res) {
         json: true
       });
 
-      if (nowPlaying) {
+      if (nowPlaying && nowPlaying.is_playing) {
         /*
         const trackInfo = {
           name: nowPlaying.item.name,
@@ -54,9 +54,7 @@ async function nowPlaying(req, res) {
         };
         */
         let text = `<@${id}>: `;
-        if (req.body.text) {
-          text += req.body.text+'\n';
-        }
+        if (req.body.text) text += req.body.text+'\n';
         text += nowPlaying.item.external_urls.spotify;
 
         request.post(slack_response_url, {
