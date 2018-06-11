@@ -71,7 +71,7 @@ async function nowPlaying(req, res) {
         request.post(slack_response_url, {
           body: {
             response_type: 'ephemeral', // only show this to the user who called it
-            text: `Ain't nothing playing ya mad lad.`,
+            text: `Ain't nothing playing ya mad lad :madcunt:`,
           },
           json: true,
         });
