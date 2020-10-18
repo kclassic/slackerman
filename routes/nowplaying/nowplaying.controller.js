@@ -1,210 +1,250 @@
-const request = require('request-promise-native');
-const querystring = require('querystring');
-const moment = require('moment');
-const crypto = require('crypto');
-// const _ = require('lodash');
+const querystring = require("querystring");
+const crypto = require("crypto");
+const AWS = require("aws-sdk");
+const axios = require("axios").default;
 
-const User = require('./user.model');
+const USERS_TABLE = process.env.USERS_TABLE;
+const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
 const SLACK = {
   token: process.env.SLACK_TOKEN,
   team_id: process.env.SLACK_TEAM_ID,
-}
+};
 
 const SPOTIFY = {
-  scope: 'user-read-currently-playing',
+  scope: "user-read-currently-playing",
   client_id: process.env.SPOTIFY_CLIENT_ID,
   client_secret: process.env.SPOTIFY_CLIENT_SECRET,
   redirect_uri: `${process.env.APP_LOCATION}/user/link/spotify`,
 };
 
 SPOTIFY.headers = {
-  Authorization: 'Basic ' + Buffer.from(`${ SPOTIFY.client_id }:${ SPOTIFY.client_secret }`).toString('base64')
+  Authorization:
+    "Basic " +
+    Buffer.from(`${SPOTIFY.client_id}:${SPOTIFY.client_secret}`).toString(
+      "base64"
+    ),
+  "Content-Type": "application/x-www-form-urlencoded",
 };
 
 async function nowPlaying(req, res) {
   try {
-    if (req.body.token !== SLACK.token) throw Error('Slack app token mismatch.'); //check slack verification token
-    if (req.body.team_id !== SLACK.team_id) throw Error('Team id mismatch.'); // check team id as well
+    if (req.body.token !== SLACK.token)
+      throw Error("Slack app token mismatch."); //check slack verification token
+    if (req.body.team_id !== SLACK.team_id) throw Error("Team id mismatch."); // check team id as well
 
-    res.json({
-      response_type: 'ephemeral',
-      text: `${req.body.command} ${req.body.text}`,
-    });
-
-    const slack_response_url = req.body.response_url;
     const id = req.body.user_id;
-    const user = await User.findOne({ id }).exec();
-
+    const query = await getUser(id);
+    const user = query.Item;
     if (user && user.spotify && user.spotify.refresh_token) {
-      await refreshAccessToken(user);
-
+      const access_token = await getAccessToken(user.spotify.refresh_token);
       // use the access token to access the Spotify Web API
-      const nowPlaying = await request.get('https://api.spotify.com/v1/me/player/currently-playing', {
-        headers: { 'Authorization': 'Bearer ' + user.spotify.access_token },
-        json: true
-      });
+      const response = await axios.get(
+        "https://api.spotify.com/v1/me/player/currently-playing",
+        {
+          headers: { Authorization: "Bearer " + access_token },
+        }
+      );
+
+      const nowPlaying = response.data;
 
       if (nowPlaying && nowPlaying.is_playing) {
-        /*
-        const trackInfo = {
-          name: nowPlaying.item.name,
-          artists: _.map(nowPlaying.item.artists, artist => artist.name).join(', '),
-          url: nowPlaying.item.external_urls.spotify,
-        };
-        */
         let text = `<@${id}>: `;
-        if (req.body.text) text += req.body.text+'\n';
+        if (req.body.text) text += req.body.text + "\n";
         text += nowPlaying.item.external_urls.spotify;
 
-        request.post(slack_response_url, {
-          body: {
-            response_type: 'in_channel',
-            unfurl_media: true,
-            text,
-          },
-          json: true,
+        res.json({
+          response_type: "in_channel",
+          unfurl_media: true,
+          text,
         });
       }
       //nothing is playing right now
       else {
-        request.post(slack_response_url, {
-          body: {
-            response_type: 'ephemeral', // only show this to the user who called it
-            text: `Ain't nothing playing ya mad lad :madcunt:`,
-          },
-          json: true,
+        res.json({
+          response_type: "ephemeral", // only show this to the user who called it
+          text: `Ain"t nothing playing ya mad lad :madcunt:`,
         });
       }
-    }
-
-    else {
-      console.log(`User with id ${id} hasn't linked Spotify, creating linking url.`);
+    } else {
+      console.log(
+        `User with id ${id} hasn"t linked Spotify, creating linking url.`
+      );
 
       const url = await newUserUrl(id);
-      request.post(slack_response_url, {
-        body: {
-          response_type: 'ephemeral', // only show this to the user who called it
-          text: 'Press the button to link your Spotify account 👀',
-          attachments: [{
+      res.json({
+        response_type: "ephemeral", // only show this to the user who called it
+        text: "Press the button to link your Spotify account 👀",
+        attachments: [
+          {
             fallback: url,
-            image_url: 'https://thumbs.gfycat.com/LawfulLikelyAmericanbadger-max-1mb.gif',
-            actions: [{
-              url,
-              type: 'button',
-              text: '👌 Link Spotify 👌',
-              style: 'primary',
-            }],
-          }]
-        },
-        json: true,
+            image_url:
+              "https://thumbs.gfycat.com/LawfulLikelyAmericanbadger-max-1mb.gif",
+            actions: [
+              {
+                url,
+                type: "button",
+                text: "👌 Link Spotify 👌",
+                style: "primary",
+              },
+            ],
+          },
+        ],
       });
     }
-  } catch (e) { handleError(e, res); }
+  } catch (e) {
+    handleError(e, res);
+  }
 }
 
-
 async function newUserUrl(id) {
-  const encryptedId = await encrypt(id);
-
-  await User.findOneAndUpdate(  //very verbose upsert
-    { id },
-    { id },
-    { upsert: true }
-  ).exec();
+  await createUser(id);
 
   const query = querystring.stringify({
-    response_type: 'code',
+    response_type: "code",
     client_id: SPOTIFY.client_id,
     scope: SPOTIFY.scope,
     redirect_uri: SPOTIFY.redirect_uri,
-    state: encryptedId,
+    state: encrypt(id),
   });
 
   return `https://accounts.spotify.com/authorize?${query}`;
 }
 
-
-
-async function linkSpotifyCallback(req, res) {
+async function linkSpotifyCallback(event) {
   // handle cancels
-  if (req.query.error) {
-    return res.redirect('https://www.youtube.com/watch?v=dQw4w9WgXcQ') //TODO lul
+  if (event.queryStringParameters.error) {
+    throw new Error("fail");
   }
-  try {
-    const code = req.query.code || null;
-    const state = req.query.state || null;
-    const id = decrypt(state);
-    const user = await User.findOne({ id }).exec();
 
-    if (!user) throw Error('User not found.');
+  const code = event.queryStringParameters.code || null;
+  const state = event.queryStringParameters.state || null;
+  const id = decrypt(state);
+  const query = await getUser(id);
+  const user = query.Item;
 
-    const auth = await request.post('https://accounts.spotify.com/api/token', {
-      form: {
-        code: code,
-        redirect_uri: SPOTIFY.redirect_uri,
-        grant_type: 'authorization_code'
-      },
+  if (!user) throw Error("User not found.");
+
+  const form = {
+    code,
+    redirect_uri: SPOTIFY.redirect_uri,
+    grant_type: "authorization_code",
+  };
+
+  const response = await axios.post(
+    "https://accounts.spotify.com/api/token",
+    querystring.stringify(form),
+    {
       headers: SPOTIFY.headers,
-      json: true
-    });
-
-    user.spotify = {
-      scope: auth.scope.split(' '),
-      refresh_token: auth.refresh_token,
-      access_token: auth.access_token,
-      valid_until: moment().add((auth.expires_in, 10), 's'),
     }
-    await user.save();
+  );
+  const auth = response.data;
 
-    console.log(`Updated user ${id} with spotify tokens.`);
+  const scope = auth.scope.split(" ");
+  const refresh_token = auth.refresh_token;
 
-    res.redirect('https://www.youtube.com/watch?v=i1IqqlW1U4k'); //TODO lul
+  await updateUser(id, scope, refresh_token);
 
-  } catch (e) { handleError(e, res); }
-}
+  console.log(`Updated user ${id} with spotify tokens.`);
 
-async function refreshAccessToken(user) {
-  // no need to refresh if the access token is still valid
-  if (moment().isBefore(moment(user.spotify.valid_until))) return user;
-
-  const fresh = await request.post('https://accounts.spotify.com/api/token', {
-    headers: SPOTIFY.headers,
-    form: {
-      grant_type: 'refresh_token',
-      refresh_token: user.spotify.refresh_token
+  return {
+    statusCode: 301,
+    headers: {
+      Location: "https://www.youtube.com/watch?v=i1IqqlW1U4k",
     },
-    json: true
-  });
-
-  user.spotify.access_token = fresh.access_token;
-  user.spotify.valid_until = moment().add(fresh.expires_in, 's');
-  await user.save();
-  return user;
+  };
 }
 
+async function getAccessToken(refresh_token) {
+  const form = {
+    grant_type: "refresh_token",
+    refresh_token,
+  };
 
-const algorithm = 'aes256';
+  const fresh = await axios.post(
+    "https://accounts.spotify.com/api/token",
+    querystring.stringify(form),
+    {
+      headers: { Authorization: SPOTIFY.headers.Authorization },
+    }
+  );
+
+  return fresh.data.access_token;
+}
+
+async function getUser(id) {
+  const params = {
+    TableName: USERS_TABLE,
+    Key: {
+      id,
+    },
+  };
+  return dynamoDb.get(params).promise();
+}
+
+async function createUser(id) {
+  const params = {
+    TableName: USERS_TABLE,
+    Key: {
+      id: id,
+    },
+    UpdateExpression: "set spotify = :empty",
+    ExpressionAttributeValues: {
+      ":empty": {
+        scope: "",
+        refresh_token: "",
+      },
+    },
+    ReturnValues: "UPDATED_NEW",
+  };
+
+  return dynamoDb.update(params).promise();
+}
+
+async function updateUser(id, scope, refresh_token) {
+  const params = {
+    TableName: USERS_TABLE,
+    Key: {
+      id,
+    },
+    UpdateExpression: "set spotify.#s = :s, spotify.refresh_token=:r",
+    ExpressionAttributeNames: {
+      "#s": "scope",
+    },
+    ExpressionAttributeValues: {
+      ":s": scope,
+      ":r": refresh_token,
+    },
+    ReturnValues: "UPDATED_NEW",
+  };
+
+  return dynamoDb.update(params).promise();
+}
+
+const algorithm = "aes256";
 const password = process.env.APP_SECRET;
 
-async function encrypt(text){
-  const iv = await crypto.randomBytes(16);
-
+function encrypt(text) {
+  const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(algorithm, password, iv);
-  let crypted = cipher.update(text,'utf8','hex');
-  crypted += cipher.final('hex');
 
-  return `${crypted}&${iv.toString('hex')}`;
+  const crypted = Buffer.concat([cipher.update(text), cipher.final()]);
+
+  return `${crypted.toString("hex")}&${iv.toString("hex")}`;
 }
 
-function decrypt(text){
-  const encryptedId = text.split('&')[0];
-  const iv = Buffer.from(text.split('&')[1], 'hex');
+function decrypt(text) {
+  const encryptedId = Buffer.from(text.split("&")[0], "hex");
+  const iv = Buffer.from(text.split("&")[1], "hex");
 
   const decipher = crypto.createDecipheriv(algorithm, password, iv);
-  let dec = decipher.update(encryptedId,'hex','utf8');
-  dec += decipher.final('utf8');
-  return dec;
+
+  const decrpyted = Buffer.concat([
+    decipher.update(encryptedId),
+    decipher.final(),
+  ]);
+
+  return decrpyted.toString();
 }
 
 function handleError(error, res) {
@@ -215,4 +255,4 @@ function handleError(error, res) {
 module.exports = {
   nowPlaying,
   linkSpotifyCallback,
-}
+};

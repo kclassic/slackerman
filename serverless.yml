@@ -1,0 +1,69 @@
+org: sycnus
+app: slackerman
+service: slackerman
+
+custom:
+  tableName: "users-table-${self:provider.stage}"
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: eu-central-1
+  memorySize: 256
+  timeout: 3
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+
+  environment:
+    USERS_TABLE: ${self:custom.tableName}
+    APP_LOCATION: ${param:APP_LOCATION}
+    APP_SECRET: ${param:APP_SECRET}
+    SLACK_TEAM_ID: ${param:SLACK_TEAM_ID}
+    SLACK_TOKEN: ${param:SLACK_TOKEN}
+    SPOTIFY_CLIENT_ID: ${param:SPOTIFY_CLIENT_ID}
+    SPOTIFY_CLIENT_SECRET: ${param:SPOTIFY_CLIENT_SECRET}
+
+functions:
+  nowPlaying:
+    handler: index.handler
+    events:
+      - http:
+          method: POST
+          path: nowplaying
+  linkSpotify:
+    handler: index.spotify
+    events:
+      - http:
+          method: GET
+          path: /user/link/spotify
+
+resources:
+  Resources:
+    UsersDynamoDBTable:
+      Type: "AWS::DynamoDB::Table"
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 2
+          WriteCapacityUnits: 2
+        TableName: ${self:custom.tableName}
+
+plugins:
+  # - serverless-webpack
+  # - serverless-dynamodb-local
+  # - serverless-offline
