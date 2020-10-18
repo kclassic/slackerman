@@ -4,7 +4,8 @@
   "description": "cool shit",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ."
+    "test": "eslint .",
+    "deploy": "serverless deploy"
   },
   "engines": {
     "node": "10.3.0",

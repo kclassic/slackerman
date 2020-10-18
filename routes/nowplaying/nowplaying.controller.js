@@ -63,7 +63,7 @@ async function nowPlaying(req, res) {
       else {
         res.json({
           response_type: "ephemeral", // only show this to the user who called it
-          text: `Ain"t nothing playing ya mad lad :madcunt:`,
+          text: `Ain't nothing playing ya mad lad :madcunt:`,
         });
       }
     } else {
@@ -93,7 +93,7 @@ async function nowPlaying(req, res) {
       });
     }
   } catch (e) {
-    handleError(e, res);
+    console.error(e.message);
   }
 }
 
@@ -245,11 +245,6 @@ function decrypt(text) {
   ]);
 
   return decrpyted.toString();
-}
-
-function handleError(error, res) {
-  console.error(error.message);
-  res.sendStatus(400);
 }
 
 module.exports = {
