@@ -25,7 +25,7 @@
     "eslint": "^7.11.0",
     "eslint-plugin-node": "^11.1.0",
     "serverless-dynamodb-local": "^0.2.39",
-    "serverless-offline": "^6.8.0",
+    "serverless-offline": "^12.0.3",
     "serverless-webpack": "^5.3.5"
   },
   "private": true
