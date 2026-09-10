@@ -5,28 +5,30 @@
   "main": "index.js",
   "scripts": {
     "test": "eslint .",
+    "lint": "eslint .",
+    "package": "serverless package",
     "deploy": "serverless deploy"
   },
   "engines": {
-    "node": "10.3.0",
-    "npm": "6.1.0"
+    "node": ">=24 <25"
   },
   "author": "sycnus",
   "license": "ISC",
   "dependencies": {
-    "aws-sdk": "^2.773.0",
-    "axios": "^0.20.0",
-    "body-parser": "^1.19.0",
-    "express": "^4.17.1",
-    "form-data": "^3.0.0",
-    "serverless-http": "^2.6.0"
+    "@aws-sdk/client-dynamodb": "3.1129.0",
+    "@aws-sdk/lib-dynamodb": "3.1129.0",
+    "axios": "1.20.0",
+    "express": "5.2.1",
+    "serverless-http": "4.0.0"
+  },
+  "private": true,
+  "allowScripts": {
+    "serverless@4.42.0": true
   },
   "devDependencies": {
-    "eslint": "^7.11.0",
-    "eslint-plugin-node": "^11.1.0",
-    "serverless-dynamodb-local": "^0.2.39",
-    "serverless-offline": "^6.8.0",
-    "serverless-webpack": "^5.3.5"
-  },
-  "private": true
+    "@eslint/js": "10.0.1",
+    "eslint": "10.10.0",
+    "globals": "17.12.0",
+    "serverless": "4.42.0"
+  }
 }

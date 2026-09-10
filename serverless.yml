@@ -5,24 +5,31 @@ service: slackerman
 custom:
   tableName: "users-table-${self:provider.stage}"
 
+frameworkVersion: "4"
+
+build:
+  esbuild: false
+
 provider:
   name: aws
-  runtime: nodejs12.x
+  runtime: nodejs24.x
   stage: dev
   region: eu-central-1
   memorySize: 256
-  timeout: 3
-  iamRoleStatements:
-    - Effect: Allow
-      Action:
-        - dynamodb:Query
-        - dynamodb:Scan
-        - dynamodb:GetItem
-        - dynamodb:PutItem
-        - dynamodb:UpdateItem
-        - dynamodb:DeleteItem
-      Resource:
-        - { "Fn::GetAtt": ["UsersDynamoDBTable", "Arn"] }
+  timeout: 10
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - Fn::GetAtt: [UsersDynamoDBTable, Arn]
 
   environment:
     USERS_TABLE: ${self:custom.tableName}
@@ -63,7 +70,3 @@ resources:
           WriteCapacityUnits: 2
         TableName: ${self:custom.tableName}
 
-plugins:
-  # - serverless-webpack
-  # - serverless-dynamodb-local
-  # - serverless-offline

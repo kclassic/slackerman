@@ -8,5 +8,5 @@ npm-debug.log
 .DS_Store
 
 # Deployment related
-.env
+.env*
 .serverless

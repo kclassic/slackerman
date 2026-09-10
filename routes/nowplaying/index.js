@@ -1,9 +1,16 @@
-const router = require('express').Router();
-const bodyParser = require('body-parser');
-const controller = require('./nowplaying.controller');
+const express = require("express");
+const controller = require("./nowplaying.controller");
 
-const urlencodedParser = bodyParser.urlencoded({ extended: true });
+const router = express.Router();
 
-router.post('/nowplaying', urlencodedParser, controller.nowPlaying)
+router.post(
+  "/nowplaying",
+  express.urlencoded({
+    extended: false,
+    limit: "32kb",
+    parameterLimit: 100,
+  }),
+  controller.nowPlaying
+);
 
 module.exports = router;
